@@ -1,4 +1,3 @@
-# tkr_utils/app_paths.py
 from pathlib import Path
 from dotenv import load_dotenv
 from tkr_utils.decorators import logs_and_exceptions
@@ -22,11 +21,21 @@ class AppPaths:
 
     @staticmethod
     @logs_and_exceptions(logger)
-    def add(name: str, storage: bool = False) -> None:
+    def add(name: str, storage: bool = False, test: bool = False, project_directory: Path = None) -> None:
         """
         Add a new path to the AppPaths class. If storage is True, create a storage directory.
+        If test is True, create a test directory structure under the provided project directory.
+
+        Args:
+            name (str): The name of the new path.
+            storage (bool): Whether to create a storage directory.
+            test (bool): Whether to create a test directory.
+            project_directory (Path): The project directory where tests will be run.
         """
-        logger.info(f"Adding new path: {name} with storage: {storage}")
+        logger.info(f"Adding new path: {name} with storage: {storage} and test: {test}")
+
+        if storage and test:
+            raise ValueError("Cannot set both storage and test to True.")
         
         if storage:
             store_name = f"{name.upper()}_STORE"
@@ -38,12 +47,20 @@ class AppPaths:
             setattr(AppPaths, db_path_name, db_path)
             
             AppPaths._added_directories.append(store_path)
+            AppPaths._check_directory(store_path)
+        
+        elif test and project_directory:
+            test_dir = project_directory / name.lower()
+            setattr(AppPaths, f"{name.upper()}_TEST_DIR", test_dir)
+            
+            AppPaths._added_directories.append(test_dir)
+            AppPaths._check_directory(test_dir)
+        
         else:
             dir_path = AppPaths.LOCAL_DATA / name.lower()
             setattr(AppPaths, name.upper() + "_DIR", dir_path)
             AppPaths._added_directories.append(dir_path)
-        
-        AppPaths._check_directory(store_path if storage else dir_path)
+            AppPaths._check_directory(dir_path)
 
     @staticmethod
     @logs_and_exceptions(logger)
@@ -66,6 +83,9 @@ class AppPaths:
     def _check_directory(directory: Path) -> None:
         """
         Check if a directory exists, create it if it doesn't.
+
+        Args:
+            directory (Path): The directory to check and create if necessary.
         """
         if not directory.exists():
             logger.info(f"Creating directory: {directory}")
