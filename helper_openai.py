@@ -29,7 +29,7 @@ class OpenAIHelper:
         logger.info("OpenAIHelper initialized with model: %s, embedder: %s, and async_mode: %s", self.model, self.embedder, self.async_mode)
 
     @logs_and_exceptions(logger)
-    async def send_message_async(self, messages: List[Dict[str, Any]], temperature: float = 0.3) -> Dict[str, Any]:
+    async def send_message_async(self, messages: List[Dict[str, Any]], temperature: float = 0.0) -> Dict[str, Any]:
         """
         Send an asynchronous message to the OpenAI API and return the response.
         """
@@ -43,7 +43,22 @@ class OpenAIHelper:
         return response
 
     @logs_and_exceptions(logger)
-    def send_message(self, messages: List[Dict[str, Any]], temperature: float = 0.3) -> Dict[str, Any]:
+    async def send_message_json_async(self, messages: List[Dict[str, Any]], temperature: float = 0.0) -> Dict[str, Any]:
+        """
+        Send an asynchronous message to the OpenAI API and return the response.
+        """
+        logger.info("Sending async message to OpenAI API with model: %s", self.model)
+        response = await self.client.chat.completions.create(
+            model=self.model,
+            messages=messages,
+            temperature=temperature,
+            response_format={"type": "json_object"}
+        )
+        logger.info("Async message sent successfully.")
+        return response
+
+    @logs_and_exceptions(logger)
+    def send_message(self, messages: List[Dict[str, Any]], temperature: float = 0.0) -> Dict[str, Any]:
         """
         Send a synchronous message to the OpenAI API and return the response.
         """
