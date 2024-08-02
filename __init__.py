@@ -1,3 +1,5 @@
+# tkr_utils/__init__.py
+
 from .app_paths import *
 from .config_logging import *
 from .decorators import *
@@ -18,7 +20,6 @@ __all__ = ["app_paths", "config_logging", "decorators", "error_handler", "extrac
 __all__.extend(app_paths.__all__)
 __all__.extend(config_logging.__all__)
 __all__.extend(decorators.__all__)
-__all__.extend(error_handler.__all__)
 __all__.extend(error_handler.__all__)
 __all__.extend(helper_openai.__all__)
 __all__.extend(helper_ollama.__all__)
