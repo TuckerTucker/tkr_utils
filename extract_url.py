@@ -1,6 +1,10 @@
 import re
 from typing import Optional
+from tkr_utils import setup_logging, logs_and_exceptions
 
+logger=setup_logging(__file__)
+
+@logs_and_exceptions(logger)
 def extract_url(query: str) -> Optional[str]:
     """
     Extracts the first URL found in the query string.

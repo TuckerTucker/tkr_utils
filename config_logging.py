@@ -18,4 +18,3 @@ def setup_logging(file_path: str, level=logging.INFO, format='%(asctime)s - %(le
     return logger
 
 __all__ = ['setup_logging']
-

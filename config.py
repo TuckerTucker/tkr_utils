@@ -8,4 +8,4 @@ if OPENAI_API_KEY is None:
     raise ValueError("OPENAI_API_KEY not found in .env file.")
 
 OPENAI_EMBEDDER = "text-embedding-3-small"
-OPENAI_MODEL = "gpt-4o"
+OPENAI_MODEL = "gpt-4o-mini"

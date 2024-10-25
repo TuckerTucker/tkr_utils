@@ -2,10 +2,10 @@
 from typing import List, Dict, Any
 from dotenv import load_dotenv
 from openai import OpenAI
+from tkr_utils import setup_logging, logs_and_exceptions
 
-# from .config import OPENAI_API_KEY, OPENAI_MODEL, OPENAI_EMBEDDER
-from .decorators import logs_and_exceptions
-from .config_logging import setup_logging
+# Setup logging
+logger = setup_logging(__file__)
 
 OLLAMA_BASE_URL = "http://localhost:11434/v1"
 OLLAMA_MODEL = "qwen2"
@@ -19,9 +19,6 @@ client = client = OpenAI(
 
 # Load environment variables from .env file
 load_dotenv()
-
-# Setup logging
-logger = setup_logging(__file__)
 
 class OpenAIHelper:
     @logs_and_exceptions(logger)
@@ -54,7 +51,7 @@ class OpenAIHelper:
             logger.error("An error occurred while sending the message: %s", e)
             raise
 
-    @logs_and_exceptions(logger)    
+    @logs_and_exceptions(logger)
     def stream_response(self, messages: List[Dict[str, Any]]) -> None:
         """
         Stream responses from the OpenAI API.

@@ -1,24 +1,25 @@
 from pathlib import Path
 from dotenv import load_dotenv
 from tkr_utils.decorators import logs_and_exceptions
+
+## Logging is can't use tkr_utils.setup_logging'because of circular imports
+# todo: create a logging_config.yaml for both app_paths and setup_logging to use
 import logging
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__file__)
 
 load_dotenv()
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__file__)
-
 class AppPaths:
+    # Create Default directories
     BASE_DIR: Path = Path(__file__).resolve().parent.parent
     LOCAL_DATA: Path = BASE_DIR / "_local_data"
-    DOCS_DIR: Path = LOCAL_DATA / "_documents"
     LOG_DIR: Path = LOCAL_DATA / "_logs"
-    CHAT_LOGS: Path = LOG_DIR / "chat"
-    LAST_CHAT_FILE: Path = CHAT_LOGS / "last_chat.txt"
-    STORES_DIR: Path = LOCAL_DATA / "_stores"
 
+    # Instantiate an empty array for the diectories added by other modules/packages
     _added_directories: list = []
 
+    # The method to add utility directories to _local_data
     @staticmethod
     @logs_and_exceptions(logger)
     def add(name: str, storage: bool = False, test: bool = False, project_directory: Path = None) -> None:
@@ -32,30 +33,32 @@ class AppPaths:
             test (bool): Whether to create a test directory.
             project_directory (Path): The project directory where tests will be run.
         """
-        logger.info(f"Adding new path: {name} with storage: {storage} and test: {test}")
+        logger.debug(f"Adding new path: {name} with storage: {storage} and test: {test}")
 
+        # Check if the Storage or Test arguments are used
+        # These are used by tkr_stores and tkr_tests to ensure the proper diectory structure is maintained
         if storage and test:
             raise ValueError("Cannot set both storage and test to True.")
-        
+
         if storage:
             store_name = f"{name.upper()}_STORE"
             db_path_name = f"{name.upper()}_DB_PATH"
             store_path = AppPaths.STORES_DIR / name.lower()
             db_path = store_path / f"{name.lower()}.db"
-            
+
             setattr(AppPaths, store_name, store_path)
             setattr(AppPaths, db_path_name, db_path)
-            
+
             AppPaths._added_directories.append(store_path)
             AppPaths._check_directory(store_path)
-        
+
         elif test and project_directory:
             test_dir = project_directory / name.lower()
             setattr(AppPaths, f"{name.upper()}_TEST_DIR", test_dir)
-            
+
             AppPaths._added_directories.append(test_dir)
             AppPaths._check_directory(test_dir)
-        
+
         else:
             dir_path = AppPaths.LOCAL_DATA / name.lower()
             setattr(AppPaths, name.upper() + "_DIR", dir_path)
@@ -68,16 +71,15 @@ class AppPaths:
         """
         Ensure all directories exist, create them if they don't.
         """
-        logger.info("Checking all directories.")
+        logger.debug("Checking all directories.")
         directories = [
             AppPaths.LOG_DIR,
-            AppPaths.DOCS_DIR,
-            AppPaths.CHAT_LOGS,
             *AppPaths._added_directories
         ]
         for directory in directories:
             AppPaths._check_directory(directory)
 
+    # Check if the diectories exist. If not, create them.
     @staticmethod
     @logs_and_exceptions(logger)
     def _check_directory(directory: Path) -> None:
@@ -91,6 +93,7 @@ class AppPaths:
             logger.info(f"Creating directory: {directory}")
             directory.mkdir(parents=True, exist_ok=True)
 
+# When imported check the directories
 AppPaths.check_directories()
 
 __all__ = ['AppPaths']

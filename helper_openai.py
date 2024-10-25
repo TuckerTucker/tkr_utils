@@ -4,14 +4,13 @@ from dotenv import load_dotenv
 from openai import OpenAI, AsyncOpenAI
 
 from .config import OPENAI_API_KEY, OPENAI_MODEL, OPENAI_EMBEDDER
-from .decorators import logs_and_exceptions
-from .config_logging import setup_logging
-
-# Load environment variables from .env file
-load_dotenv()
+from tkr_utils import setup_logging, logs_and_exceptions
 
 # Setup logging
 logger = setup_logging(__file__)
+
+# Load environment variables from .env file
+load_dotenv()
 
 class OpenAIHelper:
     @logs_and_exceptions(logger)
@@ -33,13 +32,13 @@ class OpenAIHelper:
         """
         Send an asynchronous message to the OpenAI API and return the response.
         """
-        logger.info("Sending async message to OpenAI API with model: %s", self.model)
+        logger.debug("Sending async message to OpenAI API with model: %s", self.model)
         response = await self.client.chat.completions.create(
             model=self.model,
             messages=messages,
             temperature=temperature
         )
-        logger.info("Async message sent successfully.")
+        logger.debug("Async message sent successfully.")
         return response
 
     @logs_and_exceptions(logger)
@@ -54,7 +53,7 @@ class OpenAIHelper:
             temperature=temperature,
             response_format={"type": "json_object"}
         )
-        logger.info("Async message sent successfully.")
+        logger.debug("Async message sent successfully.")
         return response
 
     @logs_and_exceptions(logger)
@@ -64,14 +63,14 @@ class OpenAIHelper:
         """
         if self.async_mode:
             raise RuntimeError("Cannot call send_message in async mode. Use send_message_async instead.")
-        
+
         logger.info("Sending message to OpenAI API with model: %s", self.model)
         response = self.client.chat.completions.create(
             model=self.model,
             messages=messages,
             temperature=temperature
         )
-        logger.info("Message sent successfully.")
+        logger.debug("Message sent successfully.")
         return response
 
     @logs_and_exceptions(logger)
@@ -88,7 +87,7 @@ class OpenAIHelper:
         async for chunk in stream:
             if chunk.choices[0].delta.content is not None:
                 print(chunk.choices[0].delta.content, end="")
-        logger.info("Async streaming completed.")
+        logger.debug("Async streaming completed.")
 
     @logs_and_exceptions(logger)
     def stream_response(self, messages: List[Dict[str, Any]]) -> None:
@@ -97,7 +96,7 @@ class OpenAIHelper:
         """
         if self.async_mode:
             raise RuntimeError("Cannot call stream_response in async mode. Use stream_response_async instead.")
-        
+
         logger.info("Starting to stream response from OpenAI API with model: %s", self.model)
         stream = self.client.chat.completions.create(
             model=self.model,
@@ -107,19 +106,19 @@ class OpenAIHelper:
         for chunk in stream:
             if chunk.choices[0].delta.content is not None:
                 print(chunk.choices[0].delta.content, end="")
-        logger.info("Streaming completed.")
+        logger.debug("Streaming completed.")
 
 # Example usage
 if __name__ == "__main__":
     myChat = OpenAIHelper(async_mode=False)  # Change to True for async mode
-    messages = [{"role": "user", "content": "Say this is a test!"}]
+    messages = [{"role": "user", "content": "Say hi. This is a test :)"}]
 
     # Send a message and get a response
     if myChat.async_mode:
         response = asyncio.run(myChat.send_message_async(messages))
     else:
         response = myChat.send_message(messages)
-    
+
     logger.info(response)
 
     # Stream a response

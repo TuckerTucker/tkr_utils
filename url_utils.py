@@ -6,7 +6,7 @@ import re
 import os
 from tkr_utils import setup_logging, logs_and_exceptions
 from tkr_utils.app_paths import AppPaths
-from tkr_utils.extract_url import extract_url  # Assuming extract_url is defined here
+from tkr_utils.extract_url import extract_url
 
 logger = setup_logging(__file__)
 
@@ -99,5 +99,5 @@ class URLUtils:
     def url_to_dirname(url: str) -> str:
         parsed_url = urlparse(url)
         dirname = parsed_url.path.replace('www.', '').replace('.', '_')
-        logger.info(f"The parsed url: {parsed_url}, The dirname: {dirname}")
+        logger.debug(f"The parsed url: {parsed_url}, The dirname: {dirname}")
         return dirname
