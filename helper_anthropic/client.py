@@ -1,121 +1,151 @@
+# tkr_bias_stories/tkr_utils/helper_anthropic/client.py
+
 import asyncio
-import json
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Union, AsyncGenerator
 from anthropic import Anthropic
 from tkr_utils import setup_logging, logs_and_exceptions
+from .models import APIResponse
 
-# Setup logging
-logger = setup_logging(__name__)
+logger = setup_logging(__file__)
 
 class AnthropicHelper:
-    """Helper class to interact with the Anthropic API."""
+    """Helper class to interact with the Anthropic API asynchronously."""
 
-    def __init__(self, api_key: Optional[str], model: str):
-        """Initialize the Anthropic client."""
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        model: str = "claude-3-sonnet-20240307"
+    ):
+        """Initialize Anthropic client with API key and model.
+
+        Args:
+            api_key: Anthropic API key
+            model: Model identifier to use
+        """
         if not api_key:
             raise ValueError("Anthropic API key is required")
+
         self.api_key = api_key
         self.model = model
         self.client = Anthropic(api_key=self.api_key)
+        self.loop = asyncio.get_running_loop()
+
         logger.info("AnthropicHelper initialized with model: %s", self.model)
 
-    @logs_and_exceptions(logger)
-    def send_message(self, messages: List[Dict[str, Any]], temperature: float = 0.0, max_tokens: int = 1024) -> str:
-        """Send a message to the Anthropic API and return the response."""
-        logger.debug("Sending message to Anthropic API with model: %s", self.model)
+    async def _run_in_executor(self, func: Any, *args: Any, **kwargs: Any) -> Any:
+        """Run synchronous client methods in thread pool.
 
-        # Format messages for Anthropic API
-        formatted_messages = []
-        for msg in messages:
-            if isinstance(msg, dict) and 'role' in msg and 'content' in msg:
-                formatted_messages.append({
-                    'role': msg['role'],
-                    'content': msg['content']
-                })
+        Args:
+            func: Function to execute
+            *args: Positional arguments
+            **kwargs: Keyword arguments
 
-        response = self.client.messages.create(
-            model=self.model,
-            messages=formatted_messages,
-            temperature=temperature,
-            max_tokens=max_tokens
+        Returns:
+            Response from function execution
+        """
+        if self.loop is None:
+            self.loop = asyncio.get_running_loop()
+
+        return await self.loop.run_in_executor(
+            None,
+            lambda: func(*args, **kwargs)
         )
-        logger.debug("Message sent successfully")
-        return response.content[0].text if response.content else ""
 
     @logs_and_exceptions(logger)
-    def send_message_json(self, messages: List[Dict[str, Any]], temperature: float = 0.0, max_tokens: int = 1024) -> str:
-        """Send a message expecting JSON response."""
-        logger.debug("Sending JSON message to Anthropic API with model: %s", self.model)
+    async def send_message(
+        self,
+        messages: List[Dict[str, Any]],
+        temperature: float = 0.0,
+        max_tokens: int = 1024,
+        stream: bool = False
+    ) -> Union[APIResponse, AsyncGenerator[str, None]]:
+        """Send a message to the Anthropic API with option to stream.
 
-        system_message = "Always respond in valid JSON format."
+        Args:
+            messages: List of message dicts with role and content
+            temperature: Sampling temperature (0.0-1.0)
+            max_tokens: Maximum tokens to generate
+            stream: Whether to stream the response
 
-        response = self.client.messages.create(
-            model=self.model,
-            system=system_message,
-            messages=messages,
-            temperature=temperature,
-            max_tokens=max_tokens
-        )
-        logger.debug("JSON message sent successfully")
-        return response.content[0].text if response.content else ""
-
-    @logs_and_exceptions(logger)
-    def stream_response(self, messages: List[Dict[str, Any]], max_tokens: int = 1024) -> None:
-        """Stream a response from the API."""
-        logger.debug("Starting to stream response from Anthropic API")
-
-        with self.client.messages.create(
-            model=self.model,
-            messages=messages,
-            max_tokens=max_tokens,
-            stream=True
-        ) as stream:
-            for chunk in stream:
-                if chunk.type == 'content_block_delta':
-                    print(chunk.delta.text, end="")
-
-        logger.debug("Streaming completed")
-
-
-class AnthropicBatchClient:
-    """Combined client handling both single and batch requests."""
-
-    def __init__(self, api_key: str, model: str):
-        """Initialize the batch client with helper."""
-        self.helper = AnthropicHelper(api_key=api_key, model=model)
-        self.requests_processed = 0
-        self.request_queue = asyncio.Queue()
-
-async def process_batch(
-    self,
-    requests: List[Dict[str, Any]],
-    output_file: Optional[str] = None
-) -> List[str]:
-    """Process a batch of requests with rate limiting."""
-    responses = []
-
-    for request in requests:
-        await self.request_queue.put(request)
-
-    while not self.request_queue.empty():
-        request = await self.request_queue.get()
+        Returns:
+            Either APIResponse object or AsyncGenerator for streaming
+        """
         try:
-            # Flatten the message structure - request is already a Dict
-            response = self.helper.send_message([request])
-            responses.append(response)
-            if output_file:
-                self.save_response(output_file, response)
-            self.requests_processed += 1
-            logger.info(f"Processed request {self.requests_processed}/{len(requests)}")
+            # Format messages for Anthropic API
+            anthropic_messages = [
+                {
+                    "role": msg.get("role", "user"),
+                    "content": msg.get("content", "")
+                }
+                for msg in messages
+            ]
+
+            # Create message parameters
+            message_params = {
+                "messages": anthropic_messages,
+                "model": self.model,
+                "max_tokens": max_tokens,
+                "temperature": temperature,
+                "stream": stream
+            }
+
+            # Call Anthropic API in executor
+            response = await self._run_in_executor(
+                self.client.messages.create,
+                **message_params
+            )
+
+            if stream:
+                return self._stream_response(response)
+
+            # Handle non-streaming response
+            return APIResponse(
+                content=response.content[0].text if response.content else "",
+                request_id=response.id,
+                success=True,
+                metadata={
+                    "usage": response.usage,
+                    "model": response.model,
+                    "role": response.role,
+                    "stop_reason": response.stop_reason,
+                    "stop_sequence": response.stop_sequence
+                }
+            )
+
         except Exception as e:
-            logger.error(f"Error processing request: {str(e)}")
-        finally:
-            self.request_queue.task_done()
+            logger.error("Error in send_message: %s", str(e))
+            if not stream:
+                return APIResponse(
+                    content="",
+                    request_id="",
+                    success=False,
+                    error=str(e)
+                )
+            raise
 
-    return responses
+    async def _stream_response(self, response: Any) -> AsyncGenerator[str, None]:
+        """Process streaming response from Anthropic API.
 
-    def save_response(self, output_file: str, response: str) -> None:
-        """Save the response to the output file."""
-        with open(output_file, 'a') as file:
-            file.write(json.dumps({"response": response}) + "\n")
-        logger.debug("Response saved successfully")
+        Args:
+            response: Streaming response from Anthropic
+
+        Yields:
+            Text content from stream
+        """
+        try:
+            async for chunk in response:
+                if hasattr(chunk, 'content') and chunk.content:
+                    yield chunk.content[0].text
+                await asyncio.sleep(0)  # Yield control
+
+        except Exception as e:
+            logger.error("Error in stream processing: %s", str(e))
+            yield ""
+
+    async def __aenter__(self):
+        """Async context manager entry."""
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Async context manager exit."""
+        self.client = None
