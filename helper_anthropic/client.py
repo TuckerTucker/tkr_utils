@@ -28,9 +28,23 @@ class AnthropicHelper:
         self.api_key = api_key
         self.model = model
         self.client = Anthropic(api_key=self.api_key)
-        self.loop = asyncio.get_running_loop()
+        self.loop = None  # Initialize loop as None, will be set when needed
 
         logger.info("AnthropicHelper initialized with model: %s", self.model)
+
+    def _ensure_loop(self) -> asyncio.AbstractEventLoop:
+        """Ensure we have a running event loop.
+
+        Returns:
+            The current event loop
+        """
+        try:
+            self.loop = asyncio.get_running_loop()
+        except RuntimeError:
+            # If no loop is running, create and set a new one
+            self.loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(self.loop)
+        return self.loop
 
     async def _run_in_executor(self, func: Any, *args: Any, **kwargs: Any) -> Any:
         """Run synchronous client methods in thread pool.
@@ -43,9 +57,7 @@ class AnthropicHelper:
         Returns:
             Response from function execution
         """
-        if self.loop is None:
-            self.loop = asyncio.get_running_loop()
-
+        self._ensure_loop()
         return await self.loop.run_in_executor(
             None,
             lambda: func(*args, **kwargs)
