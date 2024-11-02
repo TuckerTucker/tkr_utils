@@ -1,7 +1,9 @@
 # tkr_bias_stories/tkr_utils/helper_anthropic/processor.py
 
 import asyncio
+import json
 from typing import List, Dict, Any, Optional
+from datetime import datetime
 from tkr_utils import setup_logging, logs_and_exceptions
 from tkr_utils.config import MAX_REQUESTS_PER_MINUTE, MAX_TOKENS_PER_MINUTE
 from .models import RateLimits, APIResponse
@@ -72,6 +74,62 @@ class RequestProcessor:
                 if key in self.stats:
                     self.stats[key] += value
 
+    @logs_and_exceptions(logger)
+    async def _process_single_request(
+        self,
+        request: Dict[str, Any]
+    ) -> APIResponse:
+        """Process a single request with error handling and rate limiting.
+
+        Args:
+            request: Request dictionary containing content and parameters
+
+        Returns:
+            APIResponse object
+        """
+        try:
+            await self._update_stats(active_requests=1)
+
+            logger.debug("Processing single request")
+            logger.debug("Request content: %s", request.get("content", "")[:100])
+
+            # Format request for AnthropicHelper
+            messages = [{
+                "role": "user",
+                "content": request["content"]
+            }]
+
+            # Send request with proper parameters
+            response = await self.client.send_message(
+                messages=messages,
+                temperature=request.get("temperature", 0.7),
+                max_tokens=request.get("max_tokens", 1024)
+            )
+
+            if response.success:
+                await self.request_manager.record_success()
+                logger.info("Successfully processed request: %s", response.request_id)
+                logger.debug("Response content preview: %s",
+                           response.content[:100] if response.content else "Empty content")
+                return response
+            else:
+                logger.error("Failed to process request: %s", response.error)
+                await self.request_manager.record_failure()
+                return response
+
+        except Exception as e:
+            logger.error("Error processing single request: %s", str(e))
+            await self.request_manager.record_failure()
+            return APIResponse(
+                content="",
+                request_id="",
+                success=False,
+                error=str(e)
+            )
+        finally:
+            await self._update_stats(active_requests=-1)
+            await self.request_manager.release_permit()
+
     async def process_chunk(
         self,
         chunk: List[Dict[str, Any]]
@@ -126,46 +184,6 @@ class RequestProcessor:
                 )
 
         return responses
-
-    async def _process_single_request(
-        self,
-        request: Dict[str, Any]
-    ) -> APIResponse:
-        """Process a single request with error handling and rate limiting.
-
-        Args:
-            request: Request dictionary containing role and content
-
-        Returns:
-            APIResponse object
-        """
-        try:
-            await self._update_stats(active_requests=1)
-
-            # Format request for AnthropicHelper
-            messages = [{"role": "user", "content": request["content"]}]
-
-            response = await self.client.send_message(
-                messages=messages,
-                temperature=request.get("temperature", 0.0),
-                max_tokens=request.get("max_tokens", 1024)
-            )
-
-            await self.request_manager.record_success()
-            return response
-
-        except Exception as e:
-            logger.error("Error processing single request: %s", str(e))
-            await self.request_manager.record_failure()
-            return APIResponse(
-                content="",
-                request_id="",
-                success=False,
-                error=str(e)
-            )
-        finally:
-            await self._update_stats(active_requests=-1)
-            await self.request_manager.release_permit()
 
     async def process_batch(
         self,

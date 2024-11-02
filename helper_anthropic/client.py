@@ -1,6 +1,7 @@
 # tkr_bias_stories/tkr_utils/helper_anthropic/client.py
 
 import asyncio
+import json
 from typing import List, Dict, Any, Optional, Union, AsyncGenerator
 from anthropic import Anthropic
 from tkr_utils import setup_logging, logs_and_exceptions
@@ -83,6 +84,9 @@ class AnthropicHelper:
             Either APIResponse object or AsyncGenerator for streaming
         """
         try:
+            logger.debug("Sending message to Anthropic API")
+            logger.debug("Messages: %s", messages)
+
             # Format messages for Anthropic API
             anthropic_messages = [
                 {
@@ -107,22 +111,39 @@ class AnthropicHelper:
                 **message_params
             )
 
+            logger.debug("Received response from Anthropic API")
+            logger.debug("Response ID: %s", response.id)
+
             if stream:
                 return self._stream_response(response)
 
-            # Handle non-streaming response
-            return APIResponse(
-                content=response.content[0].text if response.content else "",
+            # Format response content as JSON string
+            content = json.dumps({
+                "text": response.content[0].text if response.content else ""
+            })
+
+            # Create API response
+            api_response = APIResponse(
+                content=content,  # Now properly JSON formatted
                 request_id=response.id,
                 success=True,
                 metadata={
-                    "usage": response.usage,
+                    "usage": {
+                        "total_tokens": response.usage.output_tokens + response.usage.input_tokens,
+                        "input_tokens": response.usage.input_tokens,
+                        "output_tokens": response.usage.output_tokens
+                    },
                     "model": response.model,
                     "role": response.role,
                     "stop_reason": response.stop_reason,
-                    "stop_sequence": response.stop_sequence
+                    "stop_sequence": getattr(response, 'stop_sequence', None)
                 }
             )
+
+            logger.debug("Created APIResponse object")
+            logger.debug("Response content preview: %s", content[:100] if content else "Empty content")
+
+            return api_response
 
         except Exception as e:
             logger.error("Error in send_message: %s", str(e))

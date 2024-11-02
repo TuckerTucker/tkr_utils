@@ -6,6 +6,7 @@ from openai import OpenAI, AsyncOpenAI
 from .config import OPENAI_API_KEY, OPENAI_MODEL, OPENAI_EMBEDDER
 from tkr_utils import setup_logging, logs_and_exceptions
 
+
 # Setup logging
 logger = setup_logging(__file__)
 
