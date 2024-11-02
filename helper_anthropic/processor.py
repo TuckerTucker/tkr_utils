@@ -1,7 +1,6 @@
 # tkr_bias_stories/tkr_utils/helper_anthropic/processor.py
 
 import asyncio
-import json
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 from tkr_utils import setup_logging, logs_and_exceptions
@@ -109,8 +108,6 @@ class RequestProcessor:
             if response.success:
                 await self.request_manager.record_success()
                 logger.info("Successfully processed request: %s", response.request_id)
-                logger.debug("Response content preview: %s",
-                           response.content[:100] if response.content else "Empty content")
                 return response
             else:
                 logger.error("Failed to process request: %s", response.error)
@@ -129,61 +126,6 @@ class RequestProcessor:
         finally:
             await self._update_stats(active_requests=-1)
             await self.request_manager.release_permit()
-
-    async def process_chunk(
-        self,
-        chunk: List[Dict[str, Any]]
-    ) -> List[APIResponse]:
-        """Process a chunk of requests concurrently.
-
-        Args:
-            chunk: List of request dictionaries
-
-        Returns:
-            List of APIResponse objects
-        """
-        responses = []
-        tasks = []
-
-        async with asyncio.TaskGroup() as tg:
-            for request in chunk:
-                if await self.request_manager.acquire_permit():
-                    task = tg.create_task(self._process_single_request(request))
-                    tasks.append(task)
-                else:
-                    logger.warning("Failed to acquire permit for request")
-                    responses.append(
-                        APIResponse(
-                            content="",
-                            request_id="",
-                            success=False,
-                            error="Failed to acquire request permit"
-                        )
-                    )
-
-        for task in tasks:
-            try:
-                response = await task
-                responses.append(response)
-
-                if response.success:
-                    await self._update_stats(processed=1)
-                else:
-                    await self._update_stats(failed=1)
-
-            except Exception as e:
-                logger.error("Task error in chunk processing: %s", str(e))
-                await self._update_stats(failed=1)
-                responses.append(
-                    APIResponse(
-                        content="",
-                        request_id="",
-                        success=False,
-                        error=str(e)
-                    )
-                )
-
-        return responses
 
     async def process_batch(
         self,
@@ -242,7 +184,6 @@ class RequestProcessor:
         except Exception as e:
             logger.error("Batch processing error: %s", str(e))
         finally:
-            # Log completion status
             logger.info(
                 "Batch processing completed. Processed: %d, Failed: %d, Total Chunks: %d",
                 self.stats["processed"],
