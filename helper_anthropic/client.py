@@ -117,10 +117,7 @@ class AnthropicHelper:
             if stream:
                 return self._stream_response(response)
 
-            # Format response content as JSON string
-            content = json.dumps({
-                "text": response.content[0].text if response.content else ""
-            })
+            content = response.content[0].text if response.content else ""
 
             # Create API response
             api_response = APIResponse(
